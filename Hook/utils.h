@@ -1,0 +1,39 @@
+#pragma once
+#include <iostream>
+#include <string>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <windows.h>
+
+#define WIN32_LEAN_AND_MEAN
+
+#pragma comment(lib, "ws2_32.lib")
+
+constexpr auto JUMP_TO_64_ADDRESS_SIZE = 13;
+constexpr auto RELATIVE_JMP_OPCODE_SIZE = 5;
+constexpr auto MAX_NAME = 256;
+
+enum functionsToHook
+{
+	MessageBoxWFunc,
+	connectFunc,
+	WSAConnectFunc,
+};
+
+
+namespace Utils {
+	inline void Error(const std::string& errMsg);
+	int getProcessUsername(LPWSTR pUsername);
+	int is64BitProcess(SYSTEM_INFO& sysinf);
+
+	// Hook related
+	LPVOID findFreePage(LPCVOID tagetFunction, SYSTEM_INFO& sysinf);
+	int createHook64(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT8 stolenBytes, LPVOID hookFunction);
+	int createTrampolineBack(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT8 stolenBytes, UINT8 funcToHookType);
+	int hookWrapper(LPVOID targetFunction, LPVOID hookFunction, UINT8 stolenBytes, UINT8 funcToHookType);
+
+	// Hook functions
+	int WINAPI MessageBoxWHook(HWND handle, LPCWSTR text, LPCWSTR caption, UINT type);
+	int WSAAPI connectHook(SOCKET s, const sockaddr* name, int namelen);
+	int WSAAPI WSAConnectHook(SOCKET s, const sockaddr* name, int namelen, LPWSABUF lpCallerData, LPWSABUF lpCalleeData, LPQOS lpSQOS, LPQOS lpGQOS);
+}
