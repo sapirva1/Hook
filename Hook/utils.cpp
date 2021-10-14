@@ -1,24 +1,11 @@
 #include "utils.h"
 
-typedef int(WINAPI* pGeneralMsgBox)(HWND handle, LPCWSTR text, LPCWSTR caption, UINT type);
-typedef int(WSAAPI* pConnect)(SOCKET s, const sockaddr* name, int namelen);
-typedef int(WSAAPI* pWSAConnect)(SOCKET s, const sockaddr* name, int namelen, LPWSABUF lpCallerData, LPWSABUF lpCalleeData, LPQOS lpSQOS, LPQOS lpGQOS);
-
-pGeneralMsgBox generalMsgBox = nullptr;
-pGeneralMsgBox tMsgBox = nullptr;
-
-pConnect generalConnect = nullptr;
-pConnect tConnect = nullptr;
-
-pWSAConnect generalWSAConnect = nullptr;
-pWSAConnect tWSAConnect = nullptr;
-
 int WINAPI Utils::MessageBoxWHook(HWND handle, LPCWSTR text, LPCWSTR caption, UINT type) {
     std::wcout << text << std::endl;
     std::wcout << caption << std::endl;
 
     if (!wcscmp(text, L"GL")) {
-        return generalMsgBox(handle, text, caption, type);
+        return generalMessageBoxW(handle, text, caption, type);
     }
     else {
         
@@ -281,7 +268,7 @@ int Utils::createTrampolineBack(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT
     switch (funcToHookType)
     {
     case MessageBoxWFunc:
-        generalMsgBox = (pGeneralMsgBox)trampolineBackAddress;
+        generalMessageBoxW = (pMessageBoxW)trampolineBackAddress;
         break;
     case connectFunc:
         generalConnect = (pConnect)trampolineBackAddress;
@@ -296,43 +283,22 @@ int Utils::createTrampolineBack(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT
     return EXIT_SUCCESS;
 }
 
-int Utils::hookWrapper(LPVOID hookFunction, UINT8 stolenBytes, UINT8 funcToHookType) {
+int Utils::hookWrapper(LPVOID hookFunction, UINT8 stolenBytes, LPCWSTR dllName, LPCSTR dllFunctionName, UINT8 funcToHookType) {
     SYSTEM_INFO sysinf;
-    UINT8 is64Bit = FALSE;
     LPVOID targetFunction = nullptr;
-    HMODULE hWs2_32 = NULL, hUser32 = NULL;
+    HMODULE hWs2_32 = NULL, hUser32 = NULL, tHandle = NULL;
 
+    tHandle = LoadLibraryW(dllName);
 
-    hWs2_32 = GetModuleHandleW(L"ws2_32.dll");
-    hUser32 = GetModuleHandleW(L"user32.dll");
-
-    if ((funcToHookType == connectFunc || funcToHookType == WSAConnectFunc) && !hWs2_32) {
-        Utils::Error("Failed get handle to ws2_32.dll");
-        return EXIT_FAILURE;
-    }
-    
-    if (funcToHookType == MessageBoxWFunc && !hUser32) {
-        Utils::Error("Failed get handle to user32.dll");
+    if (!tHandle) {
+        Utils::Error("Failed load dll");
         return EXIT_FAILURE;
     }
 
-    switch (funcToHookType)
-    {
-    case MessageBoxWFunc:
-        targetFunction = GetProcAddress(hUser32, "MessageBoxW");
-        break;
-    case connectFunc:
-        targetFunction = GetProcAddress(hWs2_32, "connect");
-        break;
-    case WSAConnectFunc:
-        targetFunction = GetProcAddress(hWs2_32, "WSAConnect");
-        break;
-    default:
-        break;
-    }
+    targetFunction = GetProcAddress(tHandle, dllFunctionName);
 
     if (!targetFunction) {
-        Utils::Error("No match found for hook type function or failed get handle to certain dll's");
+        Utils::Error("Failed get address of function from the dll");
         return EXIT_FAILURE;
     }
 
@@ -356,6 +322,7 @@ int Utils::hookWrapper(LPVOID hookFunction, UINT8 stolenBytes, UINT8 funcToHookT
     return EXIT_SUCCESS;
 }
 
+/*
 int Utils::getProcessUsername(LPWSTR pUsername) {
     HANDLE token = NULL;
     PTOKEN_OWNER pTokenOwner = nullptr;
@@ -423,4 +390,4 @@ int Utils::is64BitProcess(SYSTEM_INFO& sysinf) {
     else{
         return TRUE;
     }
-}
+}*/

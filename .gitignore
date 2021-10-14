@@ -1,4 +1,4 @@
 .vs
-x64
-x32
-Debug
+x64/
+x32/
+Debug/
