@@ -10,7 +10,7 @@
 #pragma comment(lib, "ws2_32.lib")
 
 constexpr auto JUMP_TO_64_ADDRESS_SIZE = 13;
-constexpr auto RELATIVE_JMP_OPCODE_SIZE = 5;
+constexpr auto JMP_OPCODE_SIZE = 5;
 constexpr auto MAX_NAME = 256;
 
 enum functionsToHook
@@ -28,9 +28,9 @@ namespace Utils {
 
 	// Hook related
 	LPVOID findFreePage(LPCVOID tagetFunction, SYSTEM_INFO& sysinf);
-	int createHook64(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT8 stolenBytes, LPVOID hookFunction);
+	int createHook(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT8 stolenBytes, LPVOID hookFunction);
 	int createTrampolineBack(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT8 stolenBytes, UINT8 funcToHookType);
-	int hookWrapper(LPVOID targetFunction, LPVOID hookFunction, UINT8 stolenBytes, UINT8 funcToHookType);
+	int hookWrapper(LPVOID hookFunction, UINT8 stolenBytes, UINT8 funcToHookType);
 
 	// Hook functions
 	int WINAPI MessageBoxWHook(HWND handle, LPCWSTR text, LPCWSTR caption, UINT type);

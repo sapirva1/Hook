@@ -5,8 +5,13 @@ typedef int(WSAAPI* pConnect)(SOCKET s, const sockaddr* name, int namelen);
 typedef int(WSAAPI* pWSAConnect)(SOCKET s, const sockaddr* name, int namelen, LPWSABUF lpCallerData, LPWSABUF lpCalleeData, LPQOS lpSQOS, LPQOS lpGQOS);
 
 pGeneralMsgBox generalMsgBox = nullptr;
+pGeneralMsgBox tMsgBox = nullptr;
+
 pConnect generalConnect = nullptr;
+pConnect tConnect = nullptr;
+
 pWSAConnect generalWSAConnect = nullptr;
+pWSAConnect tWSAConnect = nullptr;
 
 int WINAPI Utils::MessageBoxWHook(HWND handle, LPCWSTR text, LPCWSTR caption, UINT type) {
     std::wcout << text << std::endl;
@@ -16,6 +21,7 @@ int WINAPI Utils::MessageBoxWHook(HWND handle, LPCWSTR text, LPCWSTR caption, UI
         return generalMsgBox(handle, text, caption, type);
     }
     else {
+        
         return NULL;
     }
 }
@@ -103,24 +109,32 @@ LPVOID Utils::findFreePage(LPCVOID tagetFunction, SYSTEM_INFO& sysinf) {
     return nullptr;
 }
 
-int Utils::createHook64(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT8 stolenBytes, LPVOID hookFunction) {
-    UINT8* nopInstructions = nullptr;
-    LPVOID bridgeJumpAddress = nullptr;
-    DWORD oldProtectionPage = NULL;
-    UINT64 relativeAddress = NULL;
+int Utils::createHook(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT8 stolenBytes, LPVOID hookFunction) {
+    PUINT8 nopInstructions = nullptr;
     UINT8 nopInstructionsSize = NULL;
-    UINT8 jumpToBridge[RELATIVE_JMP_OPCODE_SIZE] = { 0xE9, 0x00, 0x00, 0x00, 0x00}; // JMP (relative address)
+    DWORD oldProtectionPage = NULL;
+#ifdef _WIN64
+    LPVOID bridgeJumpAddress = nullptr;
+    UINT64 relativeAddress64Bit = NULL;
+    UINT8 jumpToBridge[JMP_OPCODE_SIZE] = { 0xE9, 0x00, 0x00, 0x00, 0x00}; // JMP (relative address)
     UINT8 jumpTo64address[JUMP_TO_64_ADDRESS_SIZE] = { 0x49, 0xBA, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // MOV r10, address
                                                        0x41, 0xFF, 0xE2 }; // JMP r10
+#else
+    UINT8 jumpToHookFunction[JMP_OPCODE_SIZE] = { 0xE9, 0x00, 0x00, 0x00, 0x00}; // JMP (relative address)
+    UINT32 relativeAddress32Bit = NULL;
+#endif
     
-    nopInstructionsSize = stolenBytes - RELATIVE_JMP_OPCODE_SIZE;
-
+    nopInstructionsSize = stolenBytes - JMP_OPCODE_SIZE;
+    
+#ifdef _WIN64
     bridgeJumpAddress = Utils::findFreePage(targetFucntion, sysinf);
-    
+
     if (!bridgeJumpAddress) {
         return EXIT_FAILURE;
     }
+#endif
 
+    // Allocate X bytes in stack (faster) or in heap if exceeded _ALLOCA_S_THRESHOLD
     nopInstructions = (UINT8*)_malloca(nopInstructionsSize);// X NOP instructions to fully destroy chain of opcodes
 
     if (!nopInstructions) {
@@ -134,30 +148,50 @@ int Utils::createHook64(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT8 stolen
     }
 
     //Relative displacement to the next instruction after E9 opcode
-    relativeAddress = (UINT64)bridgeJumpAddress - ((UINT64)targetFucntion + 5);
+#ifdef _WIN64
+    relativeAddress64Bit = (UINT64)bridgeJumpAddress - ((UINT64)targetFucntion + 5);
+#else
+    relativeAddress32Bit = (UINT64)hookFunction - ((UINT64)targetFucntion + 5);
+#endif
 
-    if (memcpy_s(jumpToBridge + 1, 4, &relativeAddress, 4)) {
+#ifdef _WIN64
+    if (memcpy_s(jumpToBridge + 1, 4, &relativeAddress64Bit, 4)) {
         Utils::Error("Failed copy relative address to bridge");
         return EXIT_FAILURE;
     }
-
+#else
+    if (memcpy_s(jumpToHookFunction + 1, 4, &relativeAddress32Bit, 4)) {
+        Utils::Error("Failed copy relative address to hook function");
+        return EXIT_FAILURE;
+    }
+#endif
+    
+#ifdef _WIN64
     if (memcpy_s(jumpTo64address + 2, sizeof(hookFunction), &hookFunction, sizeof(hookFunction))) {
         Utils::Error("Failed copy hook function to jump 64 address");
         return EXIT_FAILURE;
     }
+#endif
 
-    if (!VirtualProtect(targetFucntion, stolenBytes, PAGE_EXECUTE_READWRITE, &oldProtectionPage)) {
+    if (!VirtualProtect(targetFucntion, stolenBytes, PAGE_READWRITE, &oldProtectionPage)) {
         Utils::Error("Failed change to PAGE_EXECUTE_READWRITE permission to target function");
         return EXIT_FAILURE;
     }
 
-    if (memcpy_s(targetFucntion, RELATIVE_JMP_OPCODE_SIZE, &jumpToBridge, RELATIVE_JMP_OPCODE_SIZE)) {
+#ifdef _WIN64
+    if (memcpy_s(targetFucntion, JMP_OPCODE_SIZE, &jumpToBridge, JMP_OPCODE_SIZE)) {
         Utils::Error("Failed copy to target function bridge bytes");
         return EXIT_FAILURE;
     }
+#else
+    if (memcpy_s(targetFucntion, JMP_OPCODE_SIZE, &jumpToHookFunction, JMP_OPCODE_SIZE)) {
+        Utils::Error("Failed copy to target function bridge bytes");
+        return EXIT_FAILURE;
+    }
+#endif
 
     if (nopInstructionsSize) {
-        if (memcpy_s((LPVOID)((UINT64)targetFucntion + RELATIVE_JMP_OPCODE_SIZE), nopInstructionsSize, nopInstructions, nopInstructionsSize)) {
+        if (memcpy_s((LPVOID)((UINT64)targetFucntion + JMP_OPCODE_SIZE), nopInstructionsSize, nopInstructions, nopInstructionsSize)) {
             Utils::Error("Failed copy to target function X NOP instructions");
             return EXIT_FAILURE;
         }
@@ -168,6 +202,7 @@ int Utils::createHook64(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT8 stolen
         return EXIT_FAILURE;
     }
 
+#ifdef _WIN64
     if (memcpy_s(bridgeJumpAddress, JUMP_TO_64_ADDRESS_SIZE, &jumpTo64address, JUMP_TO_64_ADDRESS_SIZE)) {
         Utils::Error("Failed copy to jump bridge jump 64 address bytes");
         return EXIT_FAILURE;
@@ -177,35 +212,66 @@ int Utils::createHook64(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT8 stolen
         Utils::Error("Failed change allocated page permission to PAGE_EXECUTE_READ to bridgeJumpAddress");
         return EXIT_FAILURE;
     }
+#endif
 
     return EXIT_SUCCESS;
 }
 
 int Utils::createTrampolineBack(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT8 stolenBytes, UINT8 funcToHookType) {
-    UINT8 jumpToOriginalTargetFunction[RELATIVE_JMP_OPCODE_SIZE] = { 0xE9, 0x00, 0x00, 0x00, 0x00 };
-    UINT64 relativeAddress = NULL;
+    UINT8 jumpToOriginalTargetFunction[JMP_OPCODE_SIZE] = { 0xE9, 0x00, 0x00, 0x00, 0x00 }; // JMP (relative address)
+#ifdef  _WIN64
+    UINT64 relativeAddress64bit = NULL;
+#else
+    UINT32 relativeAddress32bit = NULL;
+#endif    
     DWORD oldProtectionPage = NULL;
     LPVOID trampolineBackAddress = nullptr;
 
+#ifdef  _WIN64
     trampolineBackAddress = Utils::findFreePage(targetFucntion, sysinf);
+#else
+    trampolineBackAddress = VirtualAlloc(NULL, sysinf.dwPageSize, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+#endif
+
+    if (!trampolineBackAddress) {
+        return EXIT_FAILURE;
+    }
 
     //Relative displacement to the next instruction after E9 opcode
-    relativeAddress = (UINT64)targetFucntion - ((UINT64)trampolineBackAddress + 5);
+#ifdef  _WIN64
+    relativeAddress64bit = (UINT64)targetFucntion - ((UINT64)trampolineBackAddress + 5);
+#else
+    relativeAddress32bit = (UINT32)targetFucntion - ((UINT32)trampolineBackAddress + 5);
+#endif
 
     if (memcpy_s(trampolineBackAddress, stolenBytes, targetFucntion, stolenBytes)) {
         Utils::Error("Failed copy stolen bytes from target function");
         return EXIT_FAILURE;
     }
 
-    if (memcpy_s(jumpToOriginalTargetFunction + 1, 4, &relativeAddress, 4)) {
+#ifdef  _WIN64
+    if (memcpy_s(jumpToOriginalTargetFunction + 1, 4, &relativeAddress64bit, 4)) {
         Utils::Error("Failed copy relative address to jump back to original function");
         return EXIT_FAILURE;
     }
+#else
+    if (memcpy_s(jumpToOriginalTargetFunction + 1, 4, &relativeAddress32bit, 4)) {
+        Utils::Error("Failed copy relative address to jump back to original function");
+        return EXIT_FAILURE;
+    }
+#endif
 
+#ifdef  _WIN64
     if (memcpy_s((LPVOID)((UINT64)trampolineBackAddress + stolenBytes), sizeof(jumpToOriginalTargetFunction), jumpToOriginalTargetFunction, sizeof(jumpToOriginalTargetFunction))) {
         Utils::Error("Failed copy to trampolineBackAddress relative jump bytes");
         return EXIT_FAILURE;
     }
+#else
+    if (memcpy_s((LPVOID)((UINT32)trampolineBackAddress + stolenBytes), sizeof(jumpToOriginalTargetFunction), jumpToOriginalTargetFunction, sizeof(jumpToOriginalTargetFunction))) {
+        Utils::Error("Failed copy to trampolineBackAddress relative jump bytes");
+        return EXIT_FAILURE;
+    }
+#endif
 
     if (!VirtualProtect(trampolineBackAddress, sysinf.dwPageSize, PAGE_EXECUTE_READ, &oldProtectionPage)) {
         Utils::Error("Failed change allocated page permission to PAGE_EXECUTE_READ to trampolineBackAddress");
@@ -230,30 +296,59 @@ int Utils::createTrampolineBack(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT
     return EXIT_SUCCESS;
 }
 
-int Utils::hookWrapper(LPVOID targetFunction, LPVOID hookFunction, UINT8 stolenBytes, UINT8 funcToHookType) {
+int Utils::hookWrapper(LPVOID hookFunction, UINT8 stolenBytes, UINT8 funcToHookType) {
     SYSTEM_INFO sysinf;
     UINT8 is64Bit = FALSE;
+    LPVOID targetFunction = nullptr;
+    HMODULE hWs2_32 = NULL, hUser32 = NULL;
 
-    if (stolenBytes < RELATIVE_JMP_OPCODE_SIZE) {
+
+    hWs2_32 = GetModuleHandleW(L"ws2_32.dll");
+    hUser32 = GetModuleHandleW(L"user32.dll");
+
+    if ((funcToHookType == connectFunc || funcToHookType == WSAConnectFunc) && !hWs2_32) {
+        Utils::Error("Failed get handle to ws2_32.dll");
+        return EXIT_FAILURE;
+    }
+    
+    if (funcToHookType == MessageBoxWFunc && !hUser32) {
+        Utils::Error("Failed get handle to user32.dll");
+        return EXIT_FAILURE;
+    }
+
+    switch (funcToHookType)
+    {
+    case MessageBoxWFunc:
+        targetFunction = GetProcAddress(hUser32, "MessageBoxW");
+        break;
+    case connectFunc:
+        targetFunction = GetProcAddress(hWs2_32, "connect");
+        break;
+    case WSAConnectFunc:
+        targetFunction = GetProcAddress(hWs2_32, "WSAConnect");
+        break;
+    default:
+        break;
+    }
+
+    if (!targetFunction) {
+        Utils::Error("No match found for hook type function or failed get handle to certain dll's");
+        return EXIT_FAILURE;
+    }
+
+    if (stolenBytes < JMP_OPCODE_SIZE) {
         Utils::Error("Can't create hook with less than 5 bytes");
         return EXIT_FAILURE;
     }
 
     GetSystemInfo(&sysinf);
 
-    is64Bit = Utils::is64BitProcess(sysinf);
-
-    if (is64Bit == -1) {
-        Utils::Error("Can't determine process architecture");
-        return EXIT_FAILURE;
-    }
-
     if (Utils::createTrampolineBack(targetFunction, sysinf, stolenBytes, funcToHookType)) {
         Utils::Error("Failed to create trampoline back to original function");
         return EXIT_FAILURE;
     }
 
-    if (Utils::createHook64(targetFunction, sysinf, stolenBytes, hookFunction)) {
+    if (Utils::createHook(targetFunction, sysinf, stolenBytes, hookFunction)) {
         Utils::Error("Failed to create 64 hook");
         return EXIT_FAILURE;
     }
@@ -262,11 +357,11 @@ int Utils::hookWrapper(LPVOID targetFunction, LPVOID hookFunction, UINT8 stolenB
 }
 
 int Utils::getProcessUsername(LPWSTR pUsername) {
-    HANDLE token;
-    PTOKEN_OWNER pTokenOwner;
+    HANDLE token = NULL;
+    PTOKEN_OWNER pTokenOwner = nullptr;
     DWORD tokenInformationLength = NULL, accountNameSize = MAX_NAME;
     SID_NAME_USE SidType;
-    wchar_t accountName[MAX_NAME], domainName[MAX_NAME];
+    WCHAR accountName[MAX_NAME] = { 0 }, domainName[MAX_NAME] = { 0 };
 
     if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) {
         Utils::Error("Failed get handle to process token");
@@ -308,6 +403,7 @@ int Utils::getProcessUsername(LPWSTR pUsername) {
 
     free(pTokenOwner);
     CloseHandle(token);
+    return EXIT_SUCCESS;
 }
 
 int Utils::is64BitProcess(SYSTEM_INFO& sysinf) {
