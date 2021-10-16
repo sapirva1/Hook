@@ -4,6 +4,7 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
+#include <winternl.h>
 
 #define WIN32_LEAN_AND_MEAN
 
@@ -16,16 +17,20 @@ constexpr auto MAX_NAME = 256;
 typedef int(WINAPI* pMessageBoxW)(HWND handle, LPCWSTR text, LPCWSTR caption, UINT type);
 typedef int(WSAAPI* pConnect)(SOCKET s, const sockaddr* name, int namelen);
 typedef int(WSAAPI* pWSAConnect)(SOCKET s, const sockaddr* name, int namelen, LPWSABUF lpCallerData, LPWSABUF lpCalleeData, LPQOS lpSQOS, LPQOS lpGQOS);
+typedef NTSTATUS(WINAPI* pLdrLoadDll)(PWCHAR PathToFile OPTIONAL, ULONG Flags, PUNICODE_STRING ModuleFileName, PHANDLE ModuleHandle);
+
 
 _declspec(selectany) pMessageBoxW generalMessageBoxW = nullptr;
 _declspec(selectany) pConnect generalConnect = nullptr;
 _declspec(selectany) pWSAConnect generalWSAConnect = nullptr;
+_declspec(selectany) pLdrLoadDll generalLdrLoadDll = nullptr;
 
 enum functionsToHook
 {
 	MessageBoxWFunc,
 	connectFunc,
 	WSAConnectFunc,
+	LdrLoadDllFunc
 };
 
 
@@ -44,4 +49,5 @@ namespace Utils {
 	int WINAPI MessageBoxWHook(HWND handle, LPCWSTR text, LPCWSTR caption, UINT type);
 	int WSAAPI connectHook(SOCKET s, const sockaddr* name, int namelen);
 	int WSAAPI WSAConnectHook(SOCKET s, const sockaddr* name, int namelen, LPWSABUF lpCallerData, LPWSABUF lpCalleeData, LPQOS lpSQOS, LPQOS lpGQOS);
+	NTSTATUS WINAPI LdrLoadDllHook(PWCHAR PathToFile, ULONG Flags, PUNICODE_STRING ModuleFileName, PHANDLE ModuleHandle);
 }

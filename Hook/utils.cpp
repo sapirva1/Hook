@@ -8,7 +8,6 @@ int WINAPI Utils::MessageBoxWHook(HWND handle, LPCWSTR text, LPCWSTR caption, UI
         return generalMessageBoxW(handle, text, caption, type);
     }
     else {
-        
         return NULL;
     }
 }
@@ -49,6 +48,11 @@ int WSAAPI Utils::WSAConnectHook(SOCKET s, const sockaddr* name, int namelen, LP
     else {
         return NULL;
     }
+}
+
+NTSTATUS WINAPI Utils::LdrLoadDllHook(PWCHAR PathToFile, ULONG Flags, PUNICODE_STRING ModuleFileName, PHANDLE ModuleHandle) {
+    std::wcout << "loaded dll :" << ModuleFileName->Buffer << std::endl;
+    return generalLdrLoadDll(PathToFile, Flags, ModuleFileName, ModuleHandle);
 }
 
 inline void Utils::Error(const std::string& errMsg) {
@@ -115,7 +119,6 @@ int Utils::createHook(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT8 stolenBy
     
 #ifdef _WIN64
     bridgeJumpAddress = Utils::findFreePage(targetFucntion, sysinf);
-
     if (!bridgeJumpAddress) {
         return EXIT_FAILURE;
     }
@@ -275,6 +278,9 @@ int Utils::createTrampolineBack(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT
         break;
     case WSAConnectFunc:
         generalWSAConnect = (pWSAConnect)trampolineBackAddress;
+        break;
+    case LdrLoadDllFunc:
+        generalLdrLoadDll = (pLdrLoadDll)trampolineBackAddress;
         break;
     default:
         break;

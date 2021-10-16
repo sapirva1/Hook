@@ -1,11 +1,20 @@
 #include "utils.h"
 
+
+
+
+
+
+
+
+
+
 /*
 * Compiled with CFG
 */
 
 int main() {
-        MessageBoxW(NULL,L"Before", L"Before caption", MB_OK);
+    /*    MessageBoxW(NULL, L"Before", L"Before caption", MB_OK);
 #ifdef _WIN64
     if (Utils::hookWrapper(&Utils::MessageBoxWHook, 7, L"user32.dll", "MessageBoxW", MessageBoxWFunc)) { // 64 bit
         Utils::Error("Failed Hook 64 bit");
@@ -177,9 +186,28 @@ int main() {
     }
     else {
         std::cout << "success to coonect" << std::endl;
+    }*/
+
+
+    /*std::cout << "before hook" << std::endl;
+    HMODULE hndl2 = LoadLibraryW(L"ws2_32.dll");
+    FreeLibrary(hndl2);
+    if (Utils::hookWrapper(&Utils::LdrLoadDllHook, 5, L"ntdll.dll", "LdrLoadDll", LdrLoadDllFunc)) { // 64 bit
+        Utils::Error("Failed Hook 64 bit");
+        system("pause");
+        return EXIT_FAILURE;
     }
 
-
+    std::cout << "after hook" << std::endl;
+    hndl2 = LoadLibraryW(L"ws2_32.dll");
+    FreeLibrary(hndl2);
+    hndl2 = LoadLibraryW(L"ws2_32.dll");
+    FreeLibrary(hndl2);
+    hndl2 = LoadLibraryW(L"ws2_32.dll");
+    FreeLibrary(hndl2);
+    hndl2 = LoadLibraryW(L"ws2_32.dll");
+    FreeLibrary(hndl2);
+    hndl2 = LoadLibraryW(L"ws2_32.dll");*/
 
 
 
