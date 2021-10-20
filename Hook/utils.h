@@ -11,13 +11,13 @@
 #pragma comment(lib, "ws2_32.lib")
 
 constexpr auto JUMP_TO_64_ADDRESS_SIZE = 13;
-constexpr auto JMP_OPCODE_SIZE = 5;
+constexpr auto JMP_RELATIVE_OPCODE_SIZE = 5;
 constexpr auto MAX_NAME = 256;
 
 typedef int(WINAPI* pMessageBoxW)(HWND handle, LPCWSTR text, LPCWSTR caption, UINT type);
 typedef int(WSAAPI* pConnect)(SOCKET s, const sockaddr* name, int namelen);
 typedef int(WSAAPI* pWSAConnect)(SOCKET s, const sockaddr* name, int namelen, LPWSABUF lpCallerData, LPWSABUF lpCalleeData, LPQOS lpSQOS, LPQOS lpGQOS);
-typedef NTSTATUS(WINAPI* pLdrLoadDll)(PWCHAR PathToFile OPTIONAL, ULONG Flags, PUNICODE_STRING ModuleFileName, PHANDLE ModuleHandle);
+typedef NTSTATUS(WINAPI* pLdrLoadDll)(PWSTR PathToFile, PULONG Flags, PUNICODE_STRING ModuleFileName, PVOID ModuleHandle);
 
 
 _declspec(selectany) pMessageBoxW generalMessageBoxW = nullptr;
@@ -49,5 +49,5 @@ namespace Utils {
 	int WINAPI MessageBoxWHook(HWND handle, LPCWSTR text, LPCWSTR caption, UINT type);
 	int WSAAPI connectHook(SOCKET s, const sockaddr* name, int namelen);
 	int WSAAPI WSAConnectHook(SOCKET s, const sockaddr* name, int namelen, LPWSABUF lpCallerData, LPWSABUF lpCalleeData, LPQOS lpSQOS, LPQOS lpGQOS);
-	NTSTATUS WINAPI LdrLoadDllHook(PWCHAR PathToFile, ULONG Flags, PUNICODE_STRING ModuleFileName, PHANDLE ModuleHandle);
+	NTSTATUS WINAPI LdrLoadDllHook(PWSTR PathToFile, PULONG Flags, PUNICODE_STRING ModuleFileName, PVOID ModuleHandle);
 }

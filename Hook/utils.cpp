@@ -50,8 +50,29 @@ int WSAAPI Utils::WSAConnectHook(SOCKET s, const sockaddr* name, int namelen, LP
     }
 }
 
-NTSTATUS WINAPI Utils::LdrLoadDllHook(PWCHAR PathToFile, ULONG Flags, PUNICODE_STRING ModuleFileName, PHANDLE ModuleHandle) {
-    std::wcout << "loaded dll :" << ModuleFileName->Buffer << std::endl;
+NTSTATUS WINAPI Utils::LdrLoadDllHook(PWSTR PathToFile, PULONG Flags, PUNICODE_STRING ModuleFileName, PVOID ModuleHandle) {
+    std::wstring dllName = ModuleFileName->Buffer;
+    std::wcout << "dllName : " << dllName << std::endl;
+    if (dllName.find(L"ws2_32") != std::string::npos) {
+        std::cout << "**************************************ws2_32 - This is correct dll***************************************************" << std::endl;
+        if (Utils::hookWrapper(&Utils::connectHook, 7, L"C:\\Windows\\System32\\ws2_32.dll", "connect", connectFunc)) { // 64 bit
+            Utils::Error("Failed Hook ws2_32 - connect");
+        }
+
+        if (Utils::hookWrapper(&Utils::connectHook, 7, L"C:\\Windows\\System32\\ws2_32.dll", "WSAConnect", WSAConnectFunc)) { // 64 bit
+            Utils::Error("Failed Hook ws2_32 - WSAConnect");
+        }
+    }
+    else if (dllName.find(L"wsock32") != std::string::npos) {
+        std::cout << "**************************************wsock32 - This is correct dll***************************************************" << std::endl;
+        if (Utils::hookWrapper(&Utils::connectHook, 7, L"wsock32", "connect", connectFunc)) { // 64 bit
+            Utils::Error("Failed Hook wsock32 - connect");
+            return EXIT_FAILURE;
+        }
+    }
+    else {
+        std::cout << "Not hooking to you" << std::endl;
+    }
     return generalLdrLoadDll(PathToFile, Flags, ModuleFileName, ModuleHandle);
 }
 
@@ -107,15 +128,15 @@ int Utils::createHook(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT8 stolenBy
 #ifdef _WIN64
     LPVOID bridgeJumpAddress = nullptr;
     UINT64 relativeAddress64Bit = NULL;
-    UINT8 jumpToBridge[JMP_OPCODE_SIZE] = { 0xE9, 0x00, 0x00, 0x00, 0x00}; // JMP (relative address)
+    UINT8 jumpToBridge[JMP_RELATIVE_OPCODE_SIZE] = { 0xE9, 0x00, 0x00, 0x00, 0x00}; // JMP (relative address)
     UINT8 jumpTo64address[JUMP_TO_64_ADDRESS_SIZE] = { 0x49, 0xBA, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // MOV r10, address
                                                        0x41, 0xFF, 0xE2 }; // JMP r10
 #else
-    UINT8 jumpToHookFunction[JMP_OPCODE_SIZE] = { 0xE9, 0x00, 0x00, 0x00, 0x00}; // JMP (relative address)
+    UINT8 jumpToHookFunction[JMP_RELATIVE_OPCODE_SIZE] = { 0xE9, 0x00, 0x00, 0x00, 0x00}; // JMP (relative address)
     UINT32 relativeAddress32Bit = NULL;
 #endif
     
-    nopInstructionsSize = stolenBytes - JMP_OPCODE_SIZE;
+    nopInstructionsSize = stolenBytes - JMP_RELATIVE_OPCODE_SIZE;
     
 #ifdef _WIN64
     bridgeJumpAddress = Utils::findFreePage(targetFucntion, sysinf);
@@ -169,19 +190,19 @@ int Utils::createHook(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT8 stolenBy
     }
 
 #ifdef _WIN64
-    if (memcpy_s(targetFucntion, JMP_OPCODE_SIZE, &jumpToBridge, JMP_OPCODE_SIZE)) {
+    if (memcpy_s(targetFucntion, JMP_RELATIVE_OPCODE_SIZE, &jumpToBridge, JMP_RELATIVE_OPCODE_SIZE)) {
         Utils::Error("Failed copy to target function bridge bytes");
         return EXIT_FAILURE;
     }
 #else
-    if (memcpy_s(targetFucntion, JMP_OPCODE_SIZE, &jumpToHookFunction, JMP_OPCODE_SIZE)) {
+    if (memcpy_s(targetFucntion, JMP_RELATIVE_OPCODE_SIZE, &jumpToHookFunction, JMP_RELATIVE_OPCODE_SIZE)) {
         Utils::Error("Failed copy to target function bridge bytes");
         return EXIT_FAILURE;
     }
 #endif
 
     if (nopInstructionsSize) {
-        if (memcpy_s((LPVOID)((UINT64)targetFucntion + JMP_OPCODE_SIZE), nopInstructionsSize, nopInstructions, nopInstructionsSize)) {
+        if (memcpy_s((LPVOID)((UINT64)targetFucntion + JMP_RELATIVE_OPCODE_SIZE), nopInstructionsSize, nopInstructions, nopInstructionsSize)) {
             Utils::Error("Failed copy to target function X NOP instructions");
             return EXIT_FAILURE;
         }
@@ -208,7 +229,7 @@ int Utils::createHook(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT8 stolenBy
 }
 
 int Utils::createTrampolineBack(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT8 stolenBytes, UINT8 funcToHookType) {
-    UINT8 jumpToOriginalTargetFunction[JMP_OPCODE_SIZE] = { 0xE9, 0x00, 0x00, 0x00, 0x00 }; // JMP (relative address)
+    UINT8 jumpToOriginalTargetFunction[JMP_RELATIVE_OPCODE_SIZE] = { 0xE9, 0x00, 0x00, 0x00, 0x00 }; // JMP (relative address)
 #ifdef  _WIN64
     UINT64 relativeAddress64bit = NULL;
 #else
@@ -294,10 +315,10 @@ int Utils::hookWrapper(LPVOID hookFunction, UINT8 stolenBytes, LPCWSTR dllName, 
     LPVOID targetFunction = nullptr;
     HMODULE hWs2_32 = NULL, hUser32 = NULL, tHandle = NULL;
 
-    tHandle = LoadLibraryW(dllName);
+    tHandle = GetModuleHandleW(dllName);
 
     if (!tHandle) {
-        Utils::Error("Failed load dll");
+        Utils::Error("Failed get handle to module");
         return EXIT_FAILURE;
     }
 
@@ -308,7 +329,7 @@ int Utils::hookWrapper(LPVOID hookFunction, UINT8 stolenBytes, LPCWSTR dllName, 
         return EXIT_FAILURE;
     }
 
-    if (stolenBytes < JMP_OPCODE_SIZE) {
+    if (stolenBytes < JMP_RELATIVE_OPCODE_SIZE) {
         Utils::Error("Can't create hook with less than 5 bytes");
         return EXIT_FAILURE;
     }

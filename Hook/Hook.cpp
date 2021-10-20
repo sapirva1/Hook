@@ -1,20 +1,55 @@
 #include "utils.h"
 
-
-
-
-
-
-
-
-
-
 /*
-* Compiled with CFG
+* Compiled with CFG + DEP + ASLR on Release
 */
 
+//Hook ws2_32.dll - connect & WSAConnect
+//Hook wsock32.dll - connect
+
 int main() {
-    /*    MessageBoxW(NULL, L"Before", L"Before caption", MB_OK);
+    /*std::cout << "before hook" << std::endl;
+    HMODULE hndl2 = LoadLibraryW(L"ws2_32");
+    if (!hndl2) {
+        std::cout << "Failed load library1" << std::endl;
+    }
+    BOOL res = FreeLibrary(hndl2);
+    if (!res) {
+        std::cout << "Failed free library1" << std::endl;
+    }
+    if (Utils::hookWrapper(&Utils::LdrLoadDllHook, 5, L"ntdll.dll", "LdrLoadDll", LdrLoadDllFunc)) { // 64 bit
+        Utils::Error("Failed Hook 64 bit");
+        system("pause");
+        return EXIT_FAILURE;
+    }
+
+    std::cout << "after hook" << std::endl;
+
+    hndl2 = LoadLibraryW(L"ws2_32");
+    if (!hndl2) {
+        std::cout << "Failed get handle2" << std::endl;
+    }
+    res = FreeLibrary(hndl2);
+    if (!res) {
+        std::cout << "Failed free library2" << std::endl;
+    }*/
+
+    
+
+    if (Utils::hookWrapper(&Utils::LdrLoadDllHook, 5, L"ntdll.dll", "LdrLoadDll", LdrLoadDllFunc)) { // 64 bit
+        Utils::Error("Failed Hook ntdll - LdrLoadDll");
+        system("pause");
+        return EXIT_FAILURE;
+    }
+
+    HMODULE hndl2 = LoadLibraryW(L"C:\\Windows\\System32\\ws2_32.dll");
+    if (!hndl2) {
+        std::cout << "Failed load library1" << std::endl;
+    }
+    
+
+
+        /*MessageBoxW(NULL, L"Before", L"Before caption", MB_OK);
 #ifdef _WIN64
     if (Utils::hookWrapper(&Utils::MessageBoxWHook, 7, L"user32.dll", "MessageBoxW", MessageBoxWFunc)) { // 64 bit
         Utils::Error("Failed Hook 64 bit");
@@ -31,6 +66,12 @@ int main() {
 
     MessageBoxW(NULL, L"GL", L"After caption", MB_OK);
     system("pause");
+    */
+
+
+
+
+
 
 
 
@@ -42,7 +83,7 @@ int main() {
     SOCKET ConnectSocket;
     sockaddr_in clientService = { 0 };
 
-    std::cout << "Before Hook - try connect" << std::endl;
+    std::cout << "connect:" << std::endl;
 
     iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (iResult != NO_ERROR) {
@@ -71,12 +112,12 @@ int main() {
     }
     else {
         wprintf(L"Connected to server.\n");
+        closesocket(ConnectSocket);
     }
 
-    closesocket(ConnectSocket);
-    system("pause");
+    //system("pause");
 
-    std::cout << "After Hook - try connect" << std::endl;
+    /*std::cout << "After Hook - try connect" << std::endl;
 
     if (Utils::hookWrapper(&Utils::connectHook, 7, L"ws2_32.dll", "connect", connectFunc)) { // 64 bit
         Utils::Error("Failed Hook 64 bit");
@@ -113,7 +154,7 @@ int main() {
     }
 
     closesocket(ConnectSocket);
-    system("pause");
+    system("pause");*/
 
 
 
@@ -128,7 +169,7 @@ int main() {
 
 
 
-    std::cout << "WSAConnect connect before" << std::endl;
+    std::cout << "WSAConnect:" << std::endl;
 
     WSADATA wsaData1;
     SOCKET Winsock;//listener socket
@@ -141,7 +182,7 @@ int main() {
     if (Winsock == INVALID_SOCKET)
     {
         WSACleanup();
-        return -1;
+        //return -1;
     }
 
     clientService1.sin_family = AF_INET;
@@ -157,7 +198,7 @@ int main() {
         std::cout << "success to coonect" << std::endl;
     }
 
-    std::cout << "WSAConnect connect after" << std::endl;
+    /*std::cout << "WSAConnect connect after" << std::endl;
 
 
     if (Utils::hookWrapper(&Utils::WSAConnectHook, 7, L"ws2_32.dll", "WSAConnect", WSAConnectFunc)) { // 64 bit
@@ -188,26 +229,6 @@ int main() {
         std::cout << "success to coonect" << std::endl;
     }*/
 
-
-    /*std::cout << "before hook" << std::endl;
-    HMODULE hndl2 = LoadLibraryW(L"ws2_32.dll");
-    FreeLibrary(hndl2);
-    if (Utils::hookWrapper(&Utils::LdrLoadDllHook, 5, L"ntdll.dll", "LdrLoadDll", LdrLoadDllFunc)) { // 64 bit
-        Utils::Error("Failed Hook 64 bit");
-        system("pause");
-        return EXIT_FAILURE;
-    }
-
-    std::cout << "after hook" << std::endl;
-    hndl2 = LoadLibraryW(L"ws2_32.dll");
-    FreeLibrary(hndl2);
-    hndl2 = LoadLibraryW(L"ws2_32.dll");
-    FreeLibrary(hndl2);
-    hndl2 = LoadLibraryW(L"ws2_32.dll");
-    FreeLibrary(hndl2);
-    hndl2 = LoadLibraryW(L"ws2_32.dll");
-    FreeLibrary(hndl2);
-    hndl2 = LoadLibraryW(L"ws2_32.dll");*/
 
 
 
