@@ -1,16 +1,12 @@
 #include "utils.h"
 
-int WINAPI Utils::MessageBoxWHook(HWND handle, LPCWSTR text, LPCWSTR caption, UINT type) {
-    std::wcout << text << std::endl;
-    std::wcout << caption << std::endl;
+typedef int(WSAAPI* pConnect)(SOCKET s, const sockaddr* name, int namelen);
+typedef int(WSAAPI* pWSAConnect)(SOCKET s, const sockaddr* name, int namelen, LPWSABUF lpCallerData, LPWSABUF lpCalleeData, LPQOS lpSQOS, LPQOS lpGQOS);
+typedef NTSTATUS(WINAPI* pLdrLoadDll)(PWSTR PathToFile, PULONG Flags, PUNICODE_STRING ModuleFileName, PVOID ModuleHandle);
 
-    if (!wcscmp(text, L"GL")) {
-        return generalMessageBoxW(handle, text, caption, type);
-    }
-    else {
-        return NULL;
-    }
-}
+pConnect generalConnect = nullptr;
+pWSAConnect generalWSAConnect = nullptr;
+pLdrLoadDll generalLdrLoadDll = nullptr;
 
 int WSAAPI Utils::connectHook(SOCKET s, const sockaddr* name, int namelen) {
     std::string ipAddress = "";
@@ -52,9 +48,7 @@ int WSAAPI Utils::WSAConnectHook(SOCKET s, const sockaddr* name, int namelen, LP
 
 NTSTATUS WINAPI Utils::LdrLoadDllHook(PWSTR PathToFile, PULONG Flags, PUNICODE_STRING ModuleFileName, PVOID ModuleHandle) {
     std::wstring dllName = ModuleFileName->Buffer;
-    std::wcout << "dllName : " << dllName << std::endl;
     if (dllName.find(L"ws2_32") != std::string::npos) {
-        std::cout << "**************************************ws2_32 - This is correct dll***************************************************" << std::endl;
         if (Utils::hookWrapper(&Utils::connectHook, 7, L"C:\\Windows\\System32\\ws2_32.dll", "connect", connectFunc)) { // 64 bit
             Utils::Error("Failed Hook ws2_32 - connect");
         }
@@ -64,14 +58,9 @@ NTSTATUS WINAPI Utils::LdrLoadDllHook(PWSTR PathToFile, PULONG Flags, PUNICODE_S
         }
     }
     else if (dllName.find(L"wsock32") != std::string::npos) {
-        std::cout << "**************************************wsock32 - This is correct dll***************************************************" << std::endl;
         if (Utils::hookWrapper(&Utils::connectHook, 7, L"wsock32", "connect", connectFunc)) { // 64 bit
             Utils::Error("Failed Hook wsock32 - connect");
-            return EXIT_FAILURE;
         }
-    }
-    else {
-        std::cout << "Not hooking to you" << std::endl;
     }
     return generalLdrLoadDll(PathToFile, Flags, ModuleFileName, ModuleHandle);
 }
@@ -208,6 +197,8 @@ int Utils::createHook(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT8 stolenBy
         }
     }
 
+    _freea(nopInstructions);
+
     if (!VirtualProtect(targetFucntion, stolenBytes, oldProtectionPage, &oldProtectionPage)) {
         Utils::Error("Failed restore old permission to target function");
         return EXIT_FAILURE;
@@ -291,9 +282,6 @@ int Utils::createTrampolineBack(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT
 
     switch (funcToHookType)
     {
-    case MessageBoxWFunc:
-        generalMessageBoxW = (pMessageBoxW)trampolineBackAddress;
-        break;
     case connectFunc:
         generalConnect = (pConnect)trampolineBackAddress;
         break;
@@ -313,20 +301,37 @@ int Utils::createTrampolineBack(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT
 int Utils::hookWrapper(LPVOID hookFunction, UINT8 stolenBytes, LPCWSTR dllName, LPCSTR dllFunctionName, UINT8 funcToHookType) {
     SYSTEM_INFO sysinf;
     LPVOID targetFunction = nullptr;
-    HMODULE hWs2_32 = NULL, hUser32 = NULL, tHandle = NULL;
+    HANDLE hCurrentProcess = NULL;
+    HMODULE hModule = NULL;
+    UINT8 opcode = NULL;
+    SIZE_T numberOfBytesRead = NULL;
 
-    tHandle = GetModuleHandleW(dllName);
+    hModule = GetModuleHandleW(dllName);
 
-    if (!tHandle) {
+    if (!hModule) {
         Utils::Error("Failed get handle to module");
         return EXIT_FAILURE;
     }
 
-    targetFunction = GetProcAddress(tHandle, dllFunctionName);
+    targetFunction = GetProcAddress(hModule, dllFunctionName);
 
     if (!targetFunction) {
         Utils::Error("Failed get address of function from the dll");
         return EXIT_FAILURE;
+    }
+
+    hCurrentProcess = GetCurrentProcess();
+    
+    if (!ReadProcessMemory(hCurrentProcess, targetFunction, &opcode, 1, &numberOfBytesRead)) {
+        Utils::Error("Failed read current process memory");
+        return EXIT_FAILURE;
+    }
+
+    CloseHandle(hCurrentProcess);
+
+    if (opcode == 0xE9) {
+        std::cout << "[!] Not hooking: Target function is already hooked"<< std::endl;
+        return EXIT_SUCCESS;
     }
 
     if (stolenBytes < JMP_RELATIVE_OPCODE_SIZE) {
