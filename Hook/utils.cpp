@@ -8,10 +8,6 @@ pConnect originalConnect = nullptr;
 pWSAConnect originalWSAConnect = nullptr;
 pLdrLoadDll originalLdrLoadDll = nullptr;
 
-LPVOID addressesBuffer[2] = { nullptr };
-std::pmr::monotonic_buffer_resource resource(addressesBuffer, sizeof(addressesBuffer));
-std::pmr::vector<LPVOID> addresses = { &resource };
-
 int WSAAPI Utils::connectHook(SOCKET s, const sockaddr* name, int namelen) {
     std::string ipAddress = "";
 
@@ -73,7 +69,7 @@ inline void Utils::Error(const std::string& errMsg) {
 	std::cout << "[-] " << errMsg << ":" << GetLastError() << "\n";
 }
 
-LPVOID Utils::findFreePage(LPCVOID tagetFunction, SYSTEM_INFO& sysinf) {
+LPVOID Utils::findFreePage(LPVOID tagetFunction, SYSTEM_INFO& sysinf) {
     UINT64 pageCounter = 1, offset = NULL, highAddress = NULL, lowAddress = NULL, minAddress = NULL, maxAddress = NULL, startPage = NULL;
     UINT32 pageSize = NULL;
     LPVOID address = nullptr;
@@ -137,7 +133,9 @@ int Utils::createHook(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT8 stolenBy
         return EXIT_FAILURE;
     }
     else {
-        addresses.push_back(bridgeJumpAddress);
+        addressesToFree.push(bridgeJumpAddress);
+        std::cout << "createHook: 0x" << addressesToFree.getArray() << std::endl;
+        std::cout << "createHook: 0x" << bridgeJumpAddress << std::endl;
     }
 #endif
 
@@ -246,7 +244,9 @@ int Utils::createTrampolineBack(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT
         return EXIT_FAILURE;
     }
     else {
-        addresses.push_back(trampolineBackAddress);
+        addressesToFree.push(trampolineBackAddress);
+        std::cout << "createTrampolineBack: 0x" << addressesToFree.getArray() << std::endl;
+        std::cout << "createTrampolineBack: 0x" << trampolineBackAddress << std::endl;
     }
     //Relative displacement to the next instruction after E9 opcode
 #ifdef  _WIN64

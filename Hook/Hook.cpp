@@ -8,12 +8,14 @@
 //Hook wsock32.dll - connect
 
 int main() {
-    /*if (Utils::hookWrapper(&Utils::LdrLoadDllHook, 5, L"ntdll.dll", "LdrLoadDll", LdrLoadDllFunc)) { // 64 bit
+    if (Utils::hookWrapper(&Utils::LdrLoadDllHook, 5, L"ntdll.dll", "LdrLoadDll", LdrLoadDllFunc)) { // 64 bit
         Utils::Error("Failed Hook ntdll - LdrLoadDll");
         system("pause");
         return EXIT_FAILURE;
-    }*/
-
+    }
+    HMODULE bla = LoadLibraryW(L"ws2_32");
+    std::cout << addressesToFree.getArray() << std::endl;
+    //HMODULE hTrustyDll = LoadLibraryW(L"C:\\Users\\User\\Desktop\\TrustyDll\\TrustyDll\\x64\\Release\\TrustyDll.dll");
 
 
     /*int iResult = NULL;
@@ -96,9 +98,5 @@ int main() {
     }*/
 
 
-
-
-
-    system("pause");
     return EXIT_SUCCESS;
-} 
+}
