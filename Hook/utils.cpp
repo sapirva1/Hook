@@ -4,9 +4,13 @@ typedef int(WSAAPI* pConnect)(SOCKET s, const sockaddr* name, int namelen);
 typedef int(WSAAPI* pWSAConnect)(SOCKET s, const sockaddr* name, int namelen, LPWSABUF lpCallerData, LPWSABUF lpCalleeData, LPQOS lpSQOS, LPQOS lpGQOS);
 typedef NTSTATUS(WINAPI* pLdrLoadDll)(PWSTR PathToFile, PULONG Flags, PUNICODE_STRING ModuleFileName, PVOID ModuleHandle);
 
-pConnect generalConnect = nullptr;
-pWSAConnect generalWSAConnect = nullptr;
-pLdrLoadDll generalLdrLoadDll = nullptr;
+pConnect originalConnect = nullptr;
+pWSAConnect originalWSAConnect = nullptr;
+pLdrLoadDll originalLdrLoadDll = nullptr;
+
+LPVOID addressesBuffer[2] = { nullptr };
+std::pmr::monotonic_buffer_resource resource(addressesBuffer, sizeof(addressesBuffer));
+std::pmr::vector<LPVOID> addresses = { &resource };
 
 int WSAAPI Utils::connectHook(SOCKET s, const sockaddr* name, int namelen) {
     std::string ipAddress = "";
@@ -20,7 +24,7 @@ int WSAAPI Utils::connectHook(SOCKET s, const sockaddr* name, int namelen) {
     std::cout << "port: " << ntohs(((sockaddr_in*)name)->sin_port) << std::endl;
 
     if (ipAddress == "127.0.0.1") {
-        return generalConnect(s, name, namelen);
+        return originalConnect(s, name, namelen);
     }
     else {
         return NULL;
@@ -39,7 +43,7 @@ int WSAAPI Utils::WSAConnectHook(SOCKET s, const sockaddr* name, int namelen, LP
     std::cout << "port: " << ntohs(((sockaddr_in*)name)->sin_port) << std::endl;
 
     if (ipAddress == "127.0.0.1") {
-        return generalWSAConnect(s, name, namelen, lpCallerData, lpCalleeData, lpSQOS, lpGQOS);
+        return originalWSAConnect(s, name, namelen, lpCallerData, lpCalleeData, lpSQOS, lpGQOS);
     }
     else {
         return NULL;
@@ -62,7 +66,7 @@ NTSTATUS WINAPI Utils::LdrLoadDllHook(PWSTR PathToFile, PULONG Flags, PUNICODE_S
             Utils::Error("Failed Hook wsock32 - connect");
         }
     }
-    return generalLdrLoadDll(PathToFile, Flags, ModuleFileName, ModuleHandle);
+    return originalLdrLoadDll(PathToFile, Flags, ModuleFileName, ModuleHandle);
 }
 
 inline void Utils::Error(const std::string& errMsg) {
@@ -131,6 +135,9 @@ int Utils::createHook(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT8 stolenBy
     bridgeJumpAddress = Utils::findFreePage(targetFucntion, sysinf);
     if (!bridgeJumpAddress) {
         return EXIT_FAILURE;
+    }
+    else {
+        addresses.push_back(bridgeJumpAddress);
     }
 #endif
 
@@ -238,7 +245,9 @@ int Utils::createTrampolineBack(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT
     if (!trampolineBackAddress) {
         return EXIT_FAILURE;
     }
-
+    else {
+        addresses.push_back(trampolineBackAddress);
+    }
     //Relative displacement to the next instruction after E9 opcode
 #ifdef  _WIN64
     relativeAddress64bit = (UINT64)targetFucntion - ((UINT64)trampolineBackAddress + 5);
@@ -283,13 +292,13 @@ int Utils::createTrampolineBack(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT
     switch (funcToHookType)
     {
     case connectFunc:
-        generalConnect = (pConnect)trampolineBackAddress;
+        originalConnect = (pConnect)trampolineBackAddress;
         break;
     case WSAConnectFunc:
-        generalWSAConnect = (pWSAConnect)trampolineBackAddress;
+        originalWSAConnect = (pWSAConnect)trampolineBackAddress;
         break;
     case LdrLoadDllFunc:
-        generalLdrLoadDll = (pLdrLoadDll)trampolineBackAddress;
+        originalLdrLoadDll = (pLdrLoadDll)trampolineBackAddress;
         break;
     default:
         break;

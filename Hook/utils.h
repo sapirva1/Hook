@@ -5,21 +5,20 @@
 #include <ws2tcpip.h>
 #include <windows.h>
 #include <winternl.h>
+#include <memory_resource>
+#include <vector>
 
 #define WIN32_LEAN_AND_MEAN
+#define JUMP_TO_64_ADDRESS_SIZE 13
+#define JMP_RELATIVE_OPCODE_SIZE 5
 
 #pragma comment(lib, "ws2_32.lib")
-
-constexpr auto JUMP_TO_64_ADDRESS_SIZE = 13;
-constexpr auto JMP_RELATIVE_OPCODE_SIZE = 5;
-constexpr auto MAX_NAME = 256;
 
 enum {
 	connectFunc,
 	WSAConnectFunc,
 	LdrLoadDllFunc,
 };
-
 
 namespace Utils {
 	inline void Error(const std::string& errMsg);
