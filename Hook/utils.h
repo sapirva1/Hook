@@ -22,7 +22,7 @@ enum {
 namespace Utils {
 	inline void Error(const std::string& errMsg);
 	//int getProcessUsername(LPWSTR pUsername);
-	//int is64BitProcess(SYSTEM_INFO& sysinf);
+    BOOL Wow64Process();
 
 	// Hook related
 	LPVOID findFreePage(LPVOID tagetFunction, SYSTEM_INFO& sysinf);
@@ -42,20 +42,19 @@ public:
     Array(T resetValue);
     ~Array() = default;
     T getArray();
-
+    int getCurrentSize();
     void push(T value);
 private:
     T privateArray[size];
     T resetValue;
+    int currSize = 0;
 };
 
 template<class T, int size>
-Array<T, size>::Array(T resetVal)
-{
+Array<T, size>::Array(T resetVal) {
     for (int index = 0; index < size; ++index) {
         this->privateArray[index] = resetVal;
     }
-    std::cout << this->privateArray << std::endl;
     this->resetValue = resetVal;
 }
 
@@ -66,19 +65,24 @@ T Array<T, size>::getArray()
 }
 
 template<class T, int size>
-void Array<T, size>::push(T value)
-{
+void Array<T, size>::push(T value) {
     UINT8 foundEmptyCell = FALSE;
     int index = 0;
-    while (!foundEmptyCell) {
+    while (index < size && !foundEmptyCell) {
         if (this->privateArray[index] == this->resetValue) {
             this->privateArray[index] = value;
             foundEmptyCell = TRUE;
+            ++this->currSize;
         }
         else {
             ++index;
         }
     }
+}
+
+template<class T, int size>
+inline int Array<T, size>::getCurrentSize() {
+    return this->currSize;
 }
 
 #ifdef _WIN64

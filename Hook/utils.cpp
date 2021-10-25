@@ -8,6 +8,8 @@ pConnect originalConnect = nullptr;
 pWSAConnect originalWSAConnect = nullptr;
 pLdrLoadDll originalLdrLoadDll = nullptr;
 
+const BOOL isWow64Process = Utils::Wow64Process();
+
 int WSAAPI Utils::connectHook(SOCKET s, const sockaddr* name, int namelen) {
     std::string ipAddress = "";
 
@@ -48,21 +50,54 @@ int WSAAPI Utils::WSAConnectHook(SOCKET s, const sockaddr* name, int namelen, LP
 
 NTSTATUS WINAPI Utils::LdrLoadDllHook(PWSTR PathToFile, PULONG Flags, PUNICODE_STRING ModuleFileName, PVOID ModuleHandle) {
     std::wstring dllName = ModuleFileName->Buffer;
+    NTSTATUS loaderRes = originalLdrLoadDll(PathToFile, Flags, ModuleFileName, ModuleHandle);
+
     if (dllName.find(L"ws2_32") != std::string::npos) {
+#ifdef _WIN64
         if (Utils::hookWrapper(&Utils::connectHook, 7, L"C:\\Windows\\System32\\ws2_32.dll", "connect", connectFunc)) { // 64 bit
             Utils::Error("Failed Hook ws2_32 - connect");
         }
-
         if (Utils::hookWrapper(&Utils::connectHook, 7, L"C:\\Windows\\System32\\ws2_32.dll", "WSAConnect", WSAConnectFunc)) { // 64 bit
             Utils::Error("Failed Hook ws2_32 - WSAConnect");
         }
+#else
+        if (isWow64Process) {
+            if (Utils::hookWrapper(&Utils::connectHook, 5, L"C:\\Windows\\SysWOW64\\ws2_32.dll", "connect", connectFunc)) { // 32 bit
+                Utils::Error("Failed Hook ws2_32 - connect");
+            }
+            if (Utils::hookWrapper(&Utils::connectHook, 5, L"C:\\Windows\\SysWOW64\\ws2_32.dll", "WSAConnect", WSAConnectFunc)) { // 32 bit
+                Utils::Error("Failed Hook ws2_32 - WSAConnect");
+            }
+        }
+        else {
+            if (Utils::hookWrapper(&Utils::connectHook, 5, L"C:\\Windows\\System32\\ws2_32.dll", "connect", connectFunc)) { // 32 bit
+                Utils::Error("Failed Hook ws2_32 - connect");
+            }
+            if (Utils::hookWrapper(&Utils::connectHook, 5, L"C:\\Windows\\System32\\ws2_32.dll", "WSAConnect", WSAConnectFunc)) { // 32 bit
+                Utils::Error("Failed Hook ws2_32 - WSAConnect");
+            }
+        }
+#endif
     }
     else if (dllName.find(L"wsock32") != std::string::npos) {
-        if (Utils::hookWrapper(&Utils::connectHook, 7, L"wsock32", "connect", connectFunc)) { // 64 bit
+#ifdef _WIN64
+        if (Utils::hookWrapper(&Utils::connectHook, 7, L"C:\\Windows\\System32\\wsock32.dll", "connect", connectFunc)) { // 64 bit
             Utils::Error("Failed Hook wsock32 - connect");
         }
+#else
+        if (isWow64Process) {
+            if (Utils::hookWrapper(&Utils::connectHook, 5, L"C:\\Windows\\SysWOW64\\wsock32.dll", "connect", connectFunc)) { // 32 bit
+                Utils::Error("Failed Hook wsock32 - connect");
+            }
+        }
+        else {
+            if (Utils::hookWrapper(&Utils::connectHook, 5, L"C:\\Windows\\System32\\wsock32.dll", "connect", connectFunc)) { // 32 bit
+                Utils::Error("Failed Hook wsock32 - connect");
+            }
+        }
+#endif
     }
-    return originalLdrLoadDll(PathToFile, Flags, ModuleFileName, ModuleHandle);
+    return loaderRes;
 }
 
 inline void Utils::Error(const std::string& errMsg) {
@@ -134,8 +169,6 @@ int Utils::createHook(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT8 stolenBy
     }
     else {
         addressesToFree.push(bridgeJumpAddress);
-        std::cout << "createHook: 0x" << addressesToFree.getArray() << std::endl;
-        std::cout << "createHook: 0x" << bridgeJumpAddress << std::endl;
     }
 #endif
 
@@ -245,8 +278,6 @@ int Utils::createTrampolineBack(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT
     }
     else {
         addressesToFree.push(trampolineBackAddress);
-        std::cout << "createTrampolineBack: 0x" << addressesToFree.getArray() << std::endl;
-        std::cout << "createTrampolineBack: 0x" << trampolineBackAddress << std::endl;
     }
     //Relative displacement to the next instruction after E9 opcode
 #ifdef  _WIN64
@@ -363,6 +394,15 @@ int Utils::hookWrapper(LPVOID hookFunction, UINT8 stolenBytes, LPCWSTR dllName, 
     return EXIT_SUCCESS;
 }
 
+BOOL Utils::Wow64Process() {
+    BOOL isWow64Process = FALSE;
+    if (!IsWow64Process(GetCurrentProcess(), &isWow64Process)) {
+        Utils::Error("Failed check if process is Wow64");
+        return -1;
+    }
+    return isWow64Process;
+}
+
 /*
 int Utils::getProcessUsername(LPWSTR pUsername) {
     HANDLE token = NULL;
@@ -412,23 +452,4 @@ int Utils::getProcessUsername(LPWSTR pUsername) {
     free(pTokenOwner);
     CloseHandle(token);
     return EXIT_SUCCESS;
-}
-
-int Utils::is64BitProcess(SYSTEM_INFO& sysinf) {
-    BOOL isWow64Process = FALSE;
-
-    if (!IsWow64Process(GetCurrentProcess(), &isWow64Process)) {
-        Utils::Error("Failed check if process is Wow64");
-        return -1;
-    }
-
-    if (sysinf.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_INTEL) {
-        return FALSE;
-    }
-    else if (sysinf.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_AMD64 && isWow64Process) {
-        return FALSE;
-    }
-    else{
-        return TRUE;
-    }
 }*/
