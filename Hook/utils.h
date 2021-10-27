@@ -1,12 +1,11 @@
 #pragma once
 #include <iostream>
 #include <string>
-#include <wchar.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
-#include <windows.h>
 #include <winternl.h>
 #include <psapi.h>
+#include <intrin.h>
 
 #define WIN32_LEAN_AND_MEAN
 #define JUMP_TO_64_ADDRESS_SIZE 13

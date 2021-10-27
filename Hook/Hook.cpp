@@ -8,15 +8,18 @@
 //Hook wsock32.dll - connect
 
 int main() {
+    if (Utils::hookWrapper(&Utils::LdrLoadDllHook, 5, L"C:\\Windows\\System32\\ntdll.dll", "LdrLoadDll", LdrLoadDllFunc)) { // 64 bit + 32 bit
+        Utils::Error("Failed Hook ntdll - LdrLoadDll");
+    }/*
 #ifdef _WIN64
-    HMODULE hTrusty = LoadLibraryW(L"C:\\Users\\sapirva\\Desktop\\TrustyDll\\TrustyDll\\x64\\Release\\TrustyDll.dll");
+    HMODULE hTrusty = LoadLibraryW(L"C:\\Users\\sapva\\Desktop\\TrustyDll\\TrustyDll\\x64\\Release\\TrustyDll.dll");
 #else
-    HMODULE hTrusty = LoadLibraryW(L"C:\\Users\\sapirva\\Desktop\\TrustyDll\\TrustyDll\\Release\\TrustyDll.dll");
+    HMODULE hTrusty = LoadLibraryW(L"C:\\Users\\sapva\\Desktop\\TrustyDll\\TrustyDll\\Release\\TrustyDll.dll");
 #endif
 
     if (!hTrusty) {
         Utils::Error("Failed load Trusty dll");
-    }
+    }*/
 
     HMODULE hWs2_32 = LoadLibraryW(L"ws2_32");
     HMODULE hWsock32 = LoadLibraryW(L"wsock32");

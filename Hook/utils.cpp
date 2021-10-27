@@ -23,7 +23,7 @@ int WSAAPI Utils::connectHook(SOCKET s, const sockaddr* name, int namelen) {
     std::wcout << "Process name: " << procInf.getProcessName() << std::endl;
     std::wcout << "Process user: " << procInf.getProcessUser() << std::endl;
     std::cout << "Address: " << ipAddress << std::endl;
-    std::cout << "Port: " << ntohs(((sockaddr_in*)name)->sin_port) << std::endl;
+    std::cout << "Port: " << _byteswap_ushort(((sockaddr_in*)name)->sin_port) << std::endl;
 
     return originalConnect(s, name, namelen);
 }
@@ -39,7 +39,7 @@ int WSAAPI Utils::WSAConnectHook(SOCKET s, const sockaddr* name, int namelen, LP
     std::wcout << "Process name: " << procInf.getProcessName() << std::endl;
     std::wcout << "Process user: " << procInf.getProcessUser() << std::endl;
     std::cout << "Address: " << ipAddress << std::endl;
-    std::cout << "Port: " << ntohs(((sockaddr_in*)name)->sin_port) << std::endl;
+    std::cout << "Port: " << _byteswap_ushort(((sockaddr_in*)name)->sin_port) << std::endl;
 
     return originalWSAConnect(s, name, namelen, lpCallerData, lpCalleeData, lpSQOS, lpGQOS);
 }
@@ -53,7 +53,7 @@ NTSTATUS WINAPI Utils::LdrLoadDllHook(PWSTR PathToFile, PULONG Flags, PUNICODE_S
         if (Utils::hookWrapper(&Utils::connectHook, 7, L"C:\\Windows\\System32\\ws2_32.dll", "connect", connectFunc)) { // 64 bit
             Utils::Error("Failed Hook ws2_32 - connect");
         }
-        if (Utils::hookWrapper(&Utils::connectHook, 7, L"C:\\Windows\\System32\\ws2_32.dll", "WSAConnect", WSAConnectFunc)) { // 64 bit
+        if (Utils::hookWrapper(&Utils::WSAConnectHook, 7, L"C:\\Windows\\System32\\ws2_32.dll", "WSAConnect", WSAConnectFunc)) { // 64 bit
             Utils::Error("Failed Hook ws2_32 - WSAConnect");
         }
 #else
@@ -61,7 +61,7 @@ NTSTATUS WINAPI Utils::LdrLoadDllHook(PWSTR PathToFile, PULONG Flags, PUNICODE_S
             if (Utils::hookWrapper(&Utils::connectHook, 5, L"C:\\Windows\\SysWOW64\\ws2_32.dll", "connect", connectFunc)) { // 32 bit
                 Utils::Error("Failed Hook ws2_32 - connect");
             }
-            if (Utils::hookWrapper(&Utils::connectHook, 5, L"C:\\Windows\\SysWOW64\\ws2_32.dll", "WSAConnect", WSAConnectFunc)) { // 32 bit
+            if (Utils::hookWrapper(&Utils::WSAConnectHook, 5, L"C:\\Windows\\SysWOW64\\ws2_32.dll", "WSAConnect", WSAConnectFunc)) { // 32 bit
                 Utils::Error("Failed Hook ws2_32 - WSAConnect");
             }
         }
@@ -69,7 +69,7 @@ NTSTATUS WINAPI Utils::LdrLoadDllHook(PWSTR PathToFile, PULONG Flags, PUNICODE_S
             if (Utils::hookWrapper(&Utils::connectHook, 5, L"C:\\Windows\\System32\\ws2_32.dll", "connect", connectFunc)) { // 32 bit
                 Utils::Error("Failed Hook ws2_32 - connect");
             }
-            if (Utils::hookWrapper(&Utils::connectHook, 5, L"C:\\Windows\\System32\\ws2_32.dll", "WSAConnect", WSAConnectFunc)) { // 32 bit
+            if (Utils::hookWrapper(&Utils::WSAConnectHook, 5, L"C:\\Windows\\System32\\ws2_32.dll", "WSAConnect", WSAConnectFunc)) { // 32 bit
                 Utils::Error("Failed Hook ws2_32 - WSAConnect");
             }
         }
