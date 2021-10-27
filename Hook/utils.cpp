@@ -10,6 +10,8 @@ pLdrLoadDll originalLdrLoadDll = nullptr;
 
 const BOOL isWow64Process = Utils::Wow64Process();
 
+ProcessInfo procInf;
+
 int WSAAPI Utils::connectHook(SOCKET s, const sockaddr* name, int namelen) {
     std::string ipAddress = "";
 
@@ -18,15 +20,12 @@ int WSAAPI Utils::connectHook(SOCKET s, const sockaddr* name, int namelen) {
     ipAddress += std::to_string((int)((sockaddr_in*)name)->sin_addr.S_un.S_un_b.s_b3) + ".";
     ipAddress += std::to_string((int)((sockaddr_in*)name)->sin_addr.S_un.S_un_b.s_b4);
 
-    std::cout << "address: " << ipAddress << std::endl;
-    std::cout << "port: " << ntohs(((sockaddr_in*)name)->sin_port) << std::endl;
+    std::wcout << "Process name: " << procInf.getProcessName() << std::endl;
+    std::wcout << "Process user: " << procInf.getProcessUser() << std::endl;
+    std::cout << "Address: " << ipAddress << std::endl;
+    std::cout << "Port: " << ntohs(((sockaddr_in*)name)->sin_port) << std::endl;
 
-    if (ipAddress == "127.0.0.1") {
-        return originalConnect(s, name, namelen);
-    }
-    else {
-        return NULL;
-    }
+    return originalConnect(s, name, namelen);
 }
 
 int WSAAPI Utils::WSAConnectHook(SOCKET s, const sockaddr* name, int namelen, LPWSABUF lpCallerData, LPWSABUF lpCalleeData, LPQOS lpSQOS, LPQOS lpGQOS) {
@@ -37,15 +36,12 @@ int WSAAPI Utils::WSAConnectHook(SOCKET s, const sockaddr* name, int namelen, LP
     ipAddress += std::to_string((int)((sockaddr_in*)name)->sin_addr.S_un.S_un_b.s_b3) + ".";
     ipAddress += std::to_string((int)((sockaddr_in*)name)->sin_addr.S_un.S_un_b.s_b4);
 
-    std::cout << "address: " << ipAddress << std::endl;
-    std::cout << "port: " << ntohs(((sockaddr_in*)name)->sin_port) << std::endl;
+    std::wcout << "Process name: " << procInf.getProcessName() << std::endl;
+    std::wcout << "Process user: " << procInf.getProcessUser() << std::endl;
+    std::cout << "Address: " << ipAddress << std::endl;
+    std::cout << "Port: " << ntohs(((sockaddr_in*)name)->sin_port) << std::endl;
 
-    if (ipAddress == "127.0.0.1") {
-        return originalWSAConnect(s, name, namelen, lpCallerData, lpCalleeData, lpSQOS, lpGQOS);
-    }
-    else {
-        return NULL;
-    }
+    return originalWSAConnect(s, name, namelen, lpCallerData, lpCalleeData, lpSQOS, lpGQOS);
 }
 
 NTSTATUS WINAPI Utils::LdrLoadDllHook(PWSTR PathToFile, PULONG Flags, PUNICODE_STRING ModuleFileName, PVOID ModuleHandle) {
@@ -121,14 +117,14 @@ LPVOID Utils::findFreePage(LPVOID tagetFunction, SYSTEM_INFO& sysinf) {
         lowAddress = startPage - offset;
 
         if (highAddress < maxAddress) {
-            address = VirtualAlloc((LPVOID)highAddress, pageSize, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+            address = VirtualAlloc((LPVOID)highAddress, pageSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
             if (address) {
                 return address;
             }
         }
 
         if (lowAddress > minAddress) {
-            address = VirtualAlloc((LPVOID)lowAddress, pageSize, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+            address = VirtualAlloc((LPVOID)lowAddress, pageSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
             if (address) {
                 return address;
             }
@@ -270,7 +266,7 @@ int Utils::createTrampolineBack(LPVOID targetFucntion, SYSTEM_INFO& sysinf, UINT
 #ifdef  _WIN64
     trampolineBackAddress = Utils::findFreePage(targetFucntion, sysinf);
 #else
-    trampolineBackAddress = VirtualAlloc(NULL, sysinf.dwPageSize, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    trampolineBackAddress = VirtualAlloc(NULL, sysinf.dwPageSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 #endif
 
     if (!trampolineBackAddress) {
@@ -403,17 +399,16 @@ BOOL Utils::Wow64Process() {
     return isWow64Process;
 }
 
-/*
-int Utils::getProcessUsername(LPWSTR pUsername) {
+void Utils::getProcessUsername(PWCHAR pProcessUsername) {
     HANDLE token = NULL;
     PTOKEN_OWNER pTokenOwner = nullptr;
-    DWORD tokenInformationLength = NULL, accountNameSize = MAX_NAME;
+    DWORD tokenInformationLength = NULL, accountNameSize = ACCOUNT_NAME_SIZE;
     SID_NAME_USE SidType;
-    WCHAR accountName[MAX_NAME] = { 0 }, domainName[MAX_NAME] = { 0 };
+    WCHAR processUser[ACCOUNT_NAME_SIZE] = { 0 }, domainName[ACCOUNT_NAME_SIZE] = { 0 };
 
     if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) {
         Utils::Error("Failed get handle to process token");
-        return EXIT_FAILURE;
+        return;
     }
 
     // Get size for token information
@@ -421,7 +416,7 @@ int Utils::getProcessUsername(LPWSTR pUsername) {
         if (GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
             CloseHandle(token);
             Utils::Error("Failed get size for token information");
-            return EXIT_FAILURE;
+            return;
         }
     }
 
@@ -432,24 +427,43 @@ int Utils::getProcessUsername(LPWSTR pUsername) {
         CloseHandle(token);
         free(pTokenOwner);
         Utils::Error("Failed get token information");
-        return EXIT_FAILURE;
+        return;
     }
 
-    if (!LookupAccountSidW(NULL, pTokenOwner->Owner, accountName, &accountNameSize, domainName, &accountNameSize, &SidType)) {
+    if (!LookupAccountSidW(NULL, pTokenOwner->Owner, pProcessUsername, &accountNameSize, domainName, &accountNameSize, &SidType)) {
         CloseHandle(token);
         free(pTokenOwner);
         Utils::Error("Failed retrieve account information");
-        return EXIT_FAILURE;
-    }
-    
-    if (wmemcpy_s(pUsername, accountNameSize, accountName, accountNameSize)) {
-        CloseHandle(token);
-        free(pTokenOwner);
-        Utils::Error("Failed copy account name");
-        return EXIT_FAILURE;
+        return;
     }
 
     free(pTokenOwner);
     CloseHandle(token);
-    return EXIT_SUCCESS;
-}*/
+}
+
+void Utils::getProcessName(PWCHAR pProcessName) {
+    HANDLE hCurrentProcess = NULL;
+
+    hCurrentProcess = GetCurrentProcess();
+
+    if (!GetModuleBaseNameW(GetCurrentProcess(), NULL, pProcessName, MAX_PATH)) {
+        Utils::Error("Failed get process name");
+    }
+
+    CloseHandle(hCurrentProcess);
+}
+
+ProcessInfo::ProcessInfo() {
+    Utils::getProcessUsername(this->processUser);
+    Utils::getProcessName(this->processName);
+}
+
+inline PWCHAR ProcessInfo::getProcessName()
+{
+    return this->processName;
+}
+
+inline PWCHAR ProcessInfo::getProcessUser()
+{
+    return this->processUser;
+}

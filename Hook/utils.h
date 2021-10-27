@@ -1,15 +1,17 @@
 #pragma once
 #include <iostream>
 #include <string>
+#include <wchar.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
 #include <winternl.h>
-#include <vector>
+#include <psapi.h>
 
 #define WIN32_LEAN_AND_MEAN
 #define JUMP_TO_64_ADDRESS_SIZE 13
 #define JMP_RELATIVE_OPCODE_SIZE 5
+#define ACCOUNT_NAME_SIZE 256
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -21,7 +23,8 @@ enum {
 
 namespace Utils {
 	inline void Error(const std::string& errMsg);
-	//int getProcessUsername(LPWSTR pUsername);
+    void getProcessUsername(PWCHAR pProcessUsername);
+    void getProcessName(PWCHAR pProcessName);
     BOOL Wow64Process();
 
 	// Hook related
@@ -35,6 +38,16 @@ namespace Utils {
 	int WSAAPI WSAConnectHook(SOCKET s, const sockaddr* name, int namelen, LPWSABUF lpCallerData, LPWSABUF lpCalleeData, LPQOS lpSQOS, LPQOS lpGQOS);
 	NTSTATUS WINAPI LdrLoadDllHook(PWSTR PathToFile, PULONG Flags, PUNICODE_STRING ModuleFileName, PVOID ModuleHandle);
 }
+
+class ProcessInfo {
+public:
+    ProcessInfo();
+    inline PWCHAR getProcessName();
+    inline PWCHAR getProcessUser();
+private:
+    WCHAR processName[MAX_PATH] = { 0 };
+    WCHAR processUser[ACCOUNT_NAME_SIZE] = { 0 };
+};
 
 template<class T, int size>
 class Array {
@@ -59,9 +72,14 @@ Array<T, size>::Array(T resetVal) {
 }
 
 template<class T, int size>
-T Array<T, size>::getArray()
+inline T Array<T, size>::getArray()
 {
     return this->privateArray;
+}
+
+template<class T, int size>
+inline int Array<T, size>::getCurrentSize() {
+    return this->currSize;
 }
 
 template<class T, int size>
@@ -78,11 +96,6 @@ void Array<T, size>::push(T value) {
             ++index;
         }
     }
-}
-
-template<class T, int size>
-inline int Array<T, size>::getCurrentSize() {
-    return this->currSize;
 }
 
 #ifdef _WIN64
